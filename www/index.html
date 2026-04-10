@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tigers Billiards & Snooker - V7.2</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --gold: #d4af37; --gold-bright: #f2d06b; --bg: #0b0d0f;
+            --glass: rgba(255, 255, 255, 0.05); --glass-border: rgba(255, 255, 255, 0.1);
+            --green: #00ff88; --red: #ff4757; --text: #ffffff;
+        }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; margin: 0; min-height: 100vh; }
+        .header { background: rgba(11, 13, 15, 0.9); backdrop-filter: blur(15px); padding: 15px; border-bottom: 1px solid var(--glass-border); text-align: center; position: sticky; top: 0; z-index: 1000; }
+        .brand-title { font-size: 1.2rem; font-weight: 900; letter-spacing: 2px; background: linear-gradient(to right, var(--gold), #fff, var(--gold)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-transform: uppercase; }
+        .container { padding: 20px; padding-bottom: 100px; }
+        .table-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .card { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 25px; padding: 25px 15px; text-align: center; cursor: pointer; transition: 0.3s; position: relative; }
+        .card.active { border: 1px solid var(--gold); background: rgba(212, 175, 55, 0.05); box-shadow: 0 0 15px rgba(212, 175, 55, 0.2); }
+        .table-circle { width: 50px; height: 50px; border: 2px solid var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-weight: bold; color: var(--gold); }
+        .btn-gold { background: linear-gradient(135deg, var(--gold), var(--gold-bright)); color: #000; border: none; padding: 15px; border-radius: 15px; font-weight: bold; width: 100%; cursor: pointer; }
+        .btn-outline { background: none; border: 1px solid var(--gold); color: var(--gold); padding: 8px 15px; border-radius: 20px; font-size: 10px; cursor: pointer; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 2000; overflow-y: auto; }
+        .nav-bar { padding: 15px 20px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--glass-border); display: flex; align-items: center; gap: 10px; overflow-x: auto; }
+        .admin-card { background: var(--glass); border-radius: 20px; padding: 20px; border: 1px solid var(--glass-border); margin-bottom: 20px; }
+        input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #444; color: #fff; padding: 12px; border-radius: 10px; margin-top: 8px; box-sizing: border-box; }
+        .excel-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+        .excel-table th { background: #1a1a1a; color: var(--gold); padding: 8px; text-align: left; border: 1px solid #333; }
+        .excel-table td { padding: 8px; border: 1px solid #222; background: rgba(255,255,255,0.01); }
+        .fab { position: fixed; bottom: 30px; right: 25px; width: 60px; height: 60px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: black; font-size: 24px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); z-index: 1500; cursor: pointer; }
+        .qty-btn { background: #333; border: 1px solid #555; color: white; width: 25px; height: 25px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .flex-between { display: flex; justify-content: space-between; align-items: flex-end; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div v-if="view === 'home'">
+        <header class="header">
+            <div class="brand-title">Tigers Billiards & Snooker</div>
+            <div style="display:flex; justify-content:center; gap:5px; margin-top:10px;">
+                <button @click="view = 'admin'; adminTab='report'" class="btn-outline">နေ့ချုပ်</button>
+                <button @click="view = 'admin'; adminTab='expense'" class="btn-outline">အသုံးပြုငွေ</button>
+                <button @click="view = 'admin'; adminTab='monthly'" class="btn-outline">လချုပ်</button>
+            </div>
+        </header>
+        <div class="container">
+            <div class="table-grid">
+                <div v-for="t in tables" :key="t.id" :class="['card', {active: t.status === 'busy'}]" @click="openTable(t)">
+                    <div class="table-circle">{{ t.id }}</div>
+                    <div v-if="t.status === 'busy'">
+                        <div style="font-size:22px; font-weight:bold;">{{ formatTime(t.elapsed) }}</div>
+                        <div style="color:var(--gold); font-size:13px;">{{ t.total.toLocaleString() }} Ks</div>
+                    </div>
+                    <div v-else style="color:#555;">Available</div>
+                </div>
+                <div :class="['card', {active: specialOrder.status === 'busy'}]" @click="openTable(specialOrder)" style="grid-column: span 2; padding: 15px;">
+                    <div style="display:flex; justify-content:center; align-items:center; gap:10px;">
+                        <i class="fas fa-glass-whiskey" style="color:var(--gold);"></i>
+                        <span style="font-weight:bold;">စားသောက်ကုန်/အအေး သီးသန့်မှာရန်</span>
+                    </div>
+                    <div v-if="specialOrder.status === 'busy'" style="color:var(--green); font-size:16px; margin-top:5px;">
+                        Total: {{ specialOrder.total.toLocaleString() }} Ks
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="fab" @click="view = 'admin'"><i class="fas fa-chart-line"></i></div>
+    </div>
+
+    <div v-if="view === 'admin'" class="overlay">
+        <div class="nav-bar">
+            <button @click="view = 'home'" style="background:none; border:none; color:white; min-width:30px;"><i class="fas fa-times"></i></button>
+            <span @click="adminTab = 'report'" :style="{color: adminTab==='report'?'var(--gold)':'#888'}" style="cursor:pointer; font-size:11px;">နေ့ချုပ်</span>
+            <span @click="adminTab = 'expense'" :style="{color: adminTab==='expense'?'var(--gold)':'#888'}" style="cursor:pointer; font-size:11px;">အသုံးပြုငွေ</span>
+            <span @click="adminTab = 'monthly'" :style="{color: adminTab==='monthly'?'var(--gold)':'#888'}" style="cursor:pointer; font-size:11px;">လချုပ်</span>
+            <span @click="adminTab = 'settings'" :style="{color: adminTab==='settings'?'var(--gold)':'#888'}" style="cursor:pointer; font-size:11px;">ပြင်ဆင်ရန်</span>
+        </div>
+
+        <div v-if="adminTab === 'report'" class="container">
+            <div class="admin-card"><input type="date" v-model="filterDate"></div>
+            <button @click="exportToExcel" class="btn-gold" style="margin-bottom:15px; background:var(--green); color:#000;">
+                <i class="fas fa-file-excel"></i> Excel (CSV) ထုတ်ယူမည်
+            </button>
+            <div class="admin-card" style="background:var(--gold); color:black; text-align:center;">
+                <div style="font-weight:bold;">ယနေ့ဝင်ငွေ - {{ filteredTotal.toLocaleString() }} Ks</div>
+            </div>
+            <div class="flex-between">
+                <h4 style="color:var(--gold); margin-bottom:5px;">ခုံဖိုးစာရင်း</h4>
+                <div style="font-size:11px; color:var(--gold-bright); margin-bottom:5px;">Daily Total ခုံဖိုး: {{ dailyBilliardTotal.toLocaleString() }} Ks</div>
+            </div>
+            <div class="admin-card" style="padding:0; overflow:hidden;">
+                <table class="excel-table">
+                    <thead><tr><th>ခုံ</th><th>အချိန်</th><th>ကြာချိန်</th><th>ခုံခ</th><th></th></tr></thead>
+                    <tbody>
+                        <tr v-for="h in sortedHistory" :key="h.id">
+                            <td>{{ h.tableId }}</td><td>{{ h.start }}-{{ h.end }}</td><td>{{ formatTime(h.elapsed) }}</td><td>{{ h.billiardOnly.toLocaleString() }}</td>
+                            <td><i @click="deleteHistory(h.id)" class="fas fa-trash" style="color:var(--red); cursor:pointer;"></i></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex-between" style="margin-top:10px;">
+                <h4 style="color:var(--gold); margin-bottom:5px;">အအေး/အစားအသောက်</h4>
+                <div style="font-size:11px; color:var(--gold-bright); margin-bottom:5px;">Daily Total အအေးဖိုး: {{ dailyItemTotal.toLocaleString() }} Ks</div>
+            </div>
+            <div class="admin-card" style="padding:0; overflow:hidden;">
+                <table class="excel-table">
+                    <thead><tr><th>အမည်</th><th>အရေအတွက်</th><th>ကျသင့်ငွေ</th></tr></thead>
+                    <tbody>
+                        <tr v-for="(val, key) in itemSummary" :key="key">
+                            <td>{{ key }}</td><td>{{ val.qty }}</td><td>{{ val.total.toLocaleString() }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div v-if="adminTab === 'expense'" class="container">
+            <div class="admin-card">
+                <h4 style="margin:0; color:var(--gold);">အသုံးပြုငွေထည့်ရန်</h4>
+                <input type="date" v-model="newExpense.date">
+                <input type="text" v-model="newExpense.title" placeholder="အကြောင်းအရာ">
+                <input type="number" v-model="newExpense.amount" placeholder="ငွေပမာဏ">
+                <button class="btn-gold" @click="addExpense" style="margin-top:10px;">သိမ်းမည်</button>
+            </div>
+            <div class="admin-card" style="padding:0; overflow-x:auto;">
+                <table class="excel-table">
+                    <thead><tr><th>ရက်စွဲ</th><th>အကြောင်းအရာ</th><th>ငွေပမာဏ</th><th></th></tr></thead>
+                    <tbody>
+                        <tr v-for="(ex, i) in expenses" :key="'exp'+i">
+                            <td>{{ ex.date }}</td><td>{{ ex.title }}</td><td>{{ ex.amount.toLocaleString() }}</td>
+                            <td><i @click="deleteExpense(i)" class="fas fa-trash" style="color:var(--red);"></i></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div v-if="adminTab === 'monthly'" class="container">
+            <div class="admin-card">
+                <h4 style="margin:0; color:var(--gold);">လချုပ်သိမ်းရန်</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div><label style="font-size:10px;">လရွေးပါ</label><input type="month" v-model="monthlyData.month"></div>
+                    <div><label style="font-size:10px;">ဝန်ထမ်းကြေး</label><input type="number" v-model="monthlyData.staff"></div>
+                    <div><label style="font-size:10px;">မီတာခ</label><input type="number" v-model="monthlyData.meter"></div>
+                </div>
+                <button class="btn-gold" @click="saveMonthly" style="margin-top:10px;">လချုပ်တွက်မည်</button>
+            </div>
+            <div class="admin-card" style="padding:0; overflow-x:auto;">
+                <table class="excel-table">
+                    <thead><tr><th>လ</th><th>ခုံ (+)</th><th>အအေး (+)</th><th>အသုံး (-)</th><th>အမြတ်</th><th></th></tr></thead>
+                    <tbody>
+                        <tr v-for="(m, i) in monthlyHistory" :key="'mon'+i">
+                            <td>{{ m.month }}</td><td>{{ m.billiard.toLocaleString() }}</td><td>{{ m.items.toLocaleString() }}</td><td>{{ m.expense.toLocaleString() }}</td>
+                            <td :style="{color: m.profit >= 0 ? 'var(--green)' : 'var(--red)'}">{{ m.profit.toLocaleString() }}</td>
+                            <td><i @click="deleteMonthly(i)" class="fas fa-trash" style="color:var(--red);"></i></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div v-if="adminTab === 'settings'" class="container">
+            <div class="admin-card">
+                <label>နာရီနှုန်း</label><input type="number" v-model="settings.rate">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                    <div><label style="font-size:10px;">HH Start</label><input type="time" v-model="settings.hStart"></div>
+                    <div><label style="font-size:10px;">HH End</label><input type="time" v-model="settings.hEnd"></div>
+                </div>
+                <label style="margin-top:10px; display:block;">HH Discount (%)</label><input type="number" v-model="settings.disPercent">
+                <button class="btn-gold" @click="saveSettings" style="margin-top:15px;">SAVE</button>
+            </div>
+            <div class="admin-card">
+                <h4 style="color:var(--gold);">Menu Manager</h4>
+                <input type="text" v-model="newItem.name" placeholder="အမည်">
+                <input type="number" v-model="newItem.price" placeholder="ဈေးနှုန်း">
+                <button class="btn-gold" @click="addNewItem" style="margin-top:10px; background:var(--green);">ADD</button>
+                <div v-for="(m, i) in menu" :key="'menu'+i" style="display:flex; justify-content:space-between; padding:8px; background:rgba(255,255,255,0.05); margin-top:5px; border-radius:10px;">
+                    <span>{{ m.name }} ({{ m.price }})</span><i @click="deleteMenuItem(i)" class="fas fa-trash" style="color:var(--red);"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="view === 'order'" class="overlay">
+        <div class="nav-bar"><button @click="view='home'" style="background:none; border:none; color:white;"><i class="fas fa-arrow-left"></i></button> <h3>{{ activeTable.id }}</h3></div>
+        <div class="container">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
+                <div v-for="m in menu" :key="m.name" @click="addItem(m)" class="card" style="padding:15px;">
+                    <div>{{ m.name }}</div><div style="color:var(--gold);">{{ m.price.toLocaleString() }}</div>
+                </div>
+            </div>
+            <div class="admin-card">
+                <div v-for="(o, index) in activeTable.orders" :key="index" style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #333;">
+                    <div style="flex:1;">{{ o.name }}</div>
+                    <div style="display:flex; align-items:center; gap:10px; flex:1; justify-content:center;">
+                        <button class="qty-btn" @click="adjustQty(index, -1)">-</button>
+                        <span style="font-weight:bold; color:var(--gold);">{{ o.qty }}</span>
+                        <button class="qty-btn" @click="adjustQty(index, 1)">+</button>
+                    </div>
+                    <div style="flex:1; text-align:right;">{{ (o.price * o.qty).toLocaleString() }}</div>
+                </div>
+                <div style="margin-top:20px; font-weight:bold; display:flex; justify-content:space-between; font-size:1.1rem;">
+                    <span>Total:</span><span style="color:var(--green);">{{ activeTable.total.toLocaleString() }} Ks</span>
+                </div>
+                <button class="btn-gold" @click="goBill" style="margin-top:20px; background:var(--green);">ဘေလ်ရှင်းမည်</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="view === 'bill'" class="overlay">
+        <div class="container">
+            <div style="background:#fff; color:#000; padding:25px; border-radius:5px; font-family:monospace;">
+                <center><h3 style="margin:0;">TIGERS BILLIARDS</h3></center>
+                <div style="margin-top:10px;">{{ activeTable.id }} | {{ getTodayDate() }}</div>
+                <hr>
+                <div v-for="(o, idx) in activeTable.orders" :key="'bill'+idx" style="display:flex; justify-content:space-between;">
+                    <span>{{ o.name }} x{{ o.qty }}</span><span>{{ (o.price * o.qty).toLocaleString() }}</span>
+                </div>
+                <div v-if="activeTable.id !== 'Order Only'" style="display:flex; justify-content:space-between;">
+                    <span>ခုံဖိုး ({{ formatTime(activeTable.elapsed) }})</span><span>{{ activeTable.billiardCost.toLocaleString() }}</span>
+                </div>
+                <hr>
+                <div style="font-weight:bold; font-size:20px; text-align:right;">TOTAL: {{ activeTable.total.toLocaleString() }} Ks</div>
+            </div>
+            <button class="btn-gold" @click="confirmCheckout" style="margin-top:20px;">ငွေလက်ခံရရှိပြီ</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp } = Vue;
+createApp({
+    data() {
+        return {
+            view: 'home', adminTab: 'report', activeTable: { orders: [], id: '', total: 0 },
+            filterDate: new Date().toISOString().split('T')[0],
+            newExpense: { date: new Date().toISOString().split('T')[0], title: '', amount: null },
+            newItem: { name: '', price: null },
+            monthlyData: { month: '', staff: 0, meter: 0 },
+            settings: JSON.parse(localStorage.getItem('tiger_v71_set')) || { rate: 3000, hStart: "09:00", hEnd: "14:00", disPercent: 50 },
+            menu: JSON.parse(localStorage.getItem('tiger_v71_menu')) || [{name:'Shark', price:1500}, {name:'M150', price:1200}],
+            tables: Array.from({length: 4}, (_, i) => ({id:'T'+(i+1), status:'idle', elapsed:0, orders:[], billiardCost:0, total:0, startTime:''})),
+            specialOrder: {id:'Order Only', status:'idle', elapsed:0, orders:[], billiardCost:0, total:0, startTime:''},
+            history: JSON.parse(localStorage.getItem('tiger_v71_hist')) || [],
+            expenses: JSON.parse(localStorage.getItem('tiger_v71_exp')) || [],
+            monthlyHistory: JSON.parse(localStorage.getItem('tiger_v71_month')) || []
+        };
+    },
+    computed: {
+        filteredHistory() { return this.history.filter(h => h.rawDate === this.filterDate); },
+        sortedHistory() { return [...this.filteredHistory].sort((a, b) => a.tableId.localeCompare(b.tableId)); },
+        filteredTotal() { return this.filteredHistory.reduce((s, h) => s + h.amount, 0); },
+        dailyBilliardTotal() { return this.filteredHistory.reduce((s, h) => s + h.billiardOnly, 0); },
+        dailyItemTotal() {
+            let total = 0;
+            this.filteredHistory.forEach(h => { if(h.items) h.items.forEach(i => total += (i.price * i.qty)); });
+            return total;
+        },
+        itemSummary() {
+            let res = {};
+            this.filteredHistory.forEach(h => { if(h.items) h.items.forEach(i => {
+                if(!res[i.name]) res[i.name] = {qty:0, total:0};
+                res[i.name].qty += i.qty; res[i.name].total += (i.price * i.qty);
+            }); });
+            return res;
+        }
+    },
+    methods: {
+        getTodayDate() { return new Date().toLocaleDateString('en-GB'); },
+        getCurrentTime() { return new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', hour12:true}); },
+        formatTime(s) { return Math.floor(s/60) + ":" + String(s%60).padStart(2,'0'); },
+        openTable(t) { 
+            if(t.status === 'idle') { 
+                if(t.id === 'Order Only' || confirm(t.id + " ဖွင့်မလား?")) { t.status='busy'; t.startTime = this.getCurrentTime(); } else return; 
+            }
+            this.activeTable = t; this.view = 'order'; 
+        },
+        addItem(it) {
+            let ex = this.activeTable.orders.find(o => o.name === it.name);
+            if(ex) ex.qty++; else this.activeTable.orders.push({...it, qty:1});
+            this.updateCosts(this.activeTable);
+        },
+        adjustQty(index, amt) {
+            this.activeTable.orders[index].qty += amt;
+            if(this.activeTable.orders[index].qty <= 0) this.activeTable.orders.splice(index, 1);
+            this.updateCosts(this.activeTable);
+        },
+        updateCosts(t) {
+            if(t.id === 'Order Only') { t.billiardCost = 0; }
+            else {
+                let now = new Date();
+                let hhmm = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+                let rate = (hhmm >= this.settings.hStart && hhmm <= this.settings.hEnd) ? (this.settings.rate * (1 - this.settings.disPercent/100)) : this.settings.rate;
+                t.billiardCost = Math.round((t.elapsed/3600) * rate);
+            }
+            t.total = t.billiardCost + t.orders.reduce((s,o) => s + (o.price * o.qty), 0);
+        },
+        goBill() { this.activeTable.status = 'paused'; this.view = 'bill'; },
+        confirmCheckout() {
+            this.history.push({
+                id: Date.now(), tableId: this.activeTable.id, amount: this.activeTable.total, billiardOnly: this.activeTable.billiardCost,
+                start: this.activeTable.startTime, end: this.getCurrentTime(), elapsed: this.activeTable.elapsed,
+                items: JSON.parse(JSON.stringify(this.activeTable.orders)), rawDate: new Date().toISOString().split('T')[0]
+            });
+            localStorage.setItem('tiger_v71_hist', JSON.stringify(this.history));
+            this.activeTable.status = 'idle'; this.activeTable.elapsed = 0; this.activeTable.orders = []; this.view = 'home';
+        },
+        deleteHistory(id) { if(confirm("ဖျက်မှာလား?")) { this.history = this.history.filter(h => h.id !== id); localStorage.setItem('tiger_v71_hist', JSON.stringify(this.history)); } },
+        exportToExcel() {
+            if (this.filteredHistory.length === 0) return alert("ဒေတာမရှိပါ");
+            let csvContent = "data:text/csv;charset=utf-8,Table,Start,End,Duration,Billiard,Items,Total\n";
+            this.sortedHistory.forEach(h => {
+                let itemTotal = h.amount - h.billiardOnly;
+                csvContent += `${h.tableId},${h.start},${h.end},${this.formatTime(h.elapsed)},${h.billiardOnly},${itemTotal},${h.amount}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri); link.setAttribute("download", "Report.csv");
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        },
+        addExpense() {
+            if(!this.newExpense.title || !this.newExpense.amount) return alert("ဖြည့်ပါ");
+            this.expenses.unshift({...this.newExpense});
+            localStorage.setItem('tiger_v71_exp', JSON.stringify(this.expenses));
+            this.newExpense = { date: new Date().toISOString().split('T')[0], title: '', amount: null };
+            alert("သိမ်းပြီးပါပြီ");
+        },
+        deleteExpense(i) { if(confirm("ဖျက်မှာလား?")) { this.expenses.splice(i,1); localStorage.setItem('tiger_v71_exp', JSON.stringify(this.expenses)); } },
+        saveMonthly() {
+            if(!this.monthlyData.month) return alert("လရွေးပါ");
+            let mBills = 0, mItems = 0, mExp = 0;
+            this.history.forEach(h => { if(h.rawDate.startsWith(this.monthlyData.month)) { mBills += h.billiardOnly; h.items.forEach(i => mItems += (i.price * i.qty)); } });
+            this.expenses.forEach(e => { if(e.date.startsWith(this.monthlyData.month)) { mExp += Number(e.amount); } });
+            let profit = (mBills + mItems) - (Number(this.monthlyData.staff) + Number(this.monthlyData.meter) + mExp);
+            this.monthlyHistory.unshift({...this.monthlyData, billiard: mBills, items: mItems, expense: mExp, profit: profit});
+            localStorage.setItem('tiger_v71_month', JSON.stringify(this.monthlyHistory));
+            alert("သိမ်းပြီးပါပြီ");
+        },
+        deleteMonthly(i) { if(confirm("ဖျက်မှာလား?")) { this.monthlyHistory.splice(i,1); localStorage.setItem('tiger_v71_month', JSON.stringify(this.monthlyHistory)); } },
+        saveSettings() { localStorage.setItem('tiger_v71_set', JSON.stringify(this.settings)); alert("Saved"); },
+        addNewItem() { if(this.newItem.name && this.newItem.price) { this.menu.push({...this.newItem}); localStorage.setItem('tiger_v71_menu', JSON.stringify(this.menu)); this.newItem = {name:'', price:null}; } },
+        deleteMenuItem(i) { this.menu.splice(i,1); localStorage.setItem('tiger_v71_menu', JSON.stringify(this.menu)); }
+    },
+    mounted() { setInterval(() => { this.tables.forEach(t => { if(t.status === 'busy') { t.elapsed++; this.updateCosts(t); } }); }, 1000); }
+}).mount('#app');
+</script>
+</body>
+</html>
+
